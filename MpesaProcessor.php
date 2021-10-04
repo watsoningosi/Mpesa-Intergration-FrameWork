@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . '/vendor/autoload.php';
+require 'config.php';
 
 use Carbon\Carbon;
 
@@ -12,6 +13,8 @@ $price = "";
 $item = "";
 $phone = "";
 
+
+
 if (isset($_POST['price'])) {
     // getting input from the form
     $fullname = mysqli_real_escape_string($mysqli, $_POST['fullname']);
@@ -20,6 +23,9 @@ if (isset($_POST['price'])) {
     $phone = mysqli_real_escape_string($mysqli, $_POST['phone']);
     $paidamount = $_REQUEST['price'];
     $phone = $_REQUEST['phone'];
+    $phone = (substr($phone, 0, 1) == "+") ? str_replace("+", "", $phone) : $phone;
+    $phone = (substr($phone, 0, 1) == "0") ? preg_replace("/^0/", "254", $phone) : $phone;
+    $phone = (substr($phone, 0, 1) == "7") ? "254{$phone}" : $phone;
 
     if (empty($fullname) || empty($item) || empty($price)) {
         echo "<script>window.alert('Please fill in all the fields')</script>";
@@ -28,7 +34,6 @@ if (isset($_POST['price'])) {
         $sql = "INSERT into payment(Fullname, Item, Price, phone) VALUES('$fullname', '$item', '$price', '$phone')";
         $res = mysqli_query($mysqli, $sql);
         if ($res) {
-            echo "<script>window.alert('Records inserted successfully into the database')</script>";
             stkPush($paidamount, $phone);
         } else {
             echo "<script>window.alert('There was an error during the insertion to the database')</script>";
@@ -71,10 +76,6 @@ function newAccessToken()
 }
 function stkPhone($phone)
 {
-
-    $formatedPhone = substr($phone, 1); //726582228
-    $code = "254";
-    $phoneNumber = $code . $formatedPhone; //254726582228
 }
 
 function stkPush($paidamount, $phone)
@@ -88,9 +89,9 @@ function stkPush($paidamount, $phone)
         'Amount' => $paidamount,
         'PartyA' => $phone,
         'PartyB' => 174379,
-        'PhoneNumber' => 254742268757,
+        'PhoneNumber' => $phone,
         'CallBackURL' => 'https://60a8b840129d.ngrok.io/callback',
-        "AccountReference" => "VlmSystems",
+        "AccountReference" => "Vlm Systems",
         "TransactionDesc" => "Vehicle Leasing Charges"
     ];
 
@@ -106,4 +107,44 @@ function stkPush($paidamount, $phone)
     curl_setopt($curl, CURLOPT_POSTFIELDS, $data_string);
     $curl_response = curl_exec($curl);
     print_r($curl_response);
+
+    if ($curl_response == 'true') {
+        echo "WAIT vlm system STK POP UP";
+    }
+    function finishTransaction($status = true)
+    {
+        if ($status === true) {
+            $resultArray = [
+                "ResultDesc" => "Confirmation Service request accepted successfully",
+                "ResultCode" => "0"
+            ];
+        } else {
+            $resultArray = [
+                "ResultDesc" => "Confirmation Service not accepted",
+                "ResultCode" => "1"
+            ];
+        }
+
+        header('Content-Type: application/json');
+
+        echo json_encode($resultArray);
+    }
+    $response = '{
+                "ResultCode": 0, 
+                "ResultDesc": "Confirmation Received Successfully"
+        }';
+
+    // DATA
+    $mpesaResponse = file_get_contents('php://input');
+
+    // log the response
+    $logFile = "M_PESAConfirmationResponse.txt";
+
+    // write to file
+    $log = fopen($logFile, "a");
+
+    fwrite($log, $mpesaResponse);
+    fclose($log);
+
+    echo $response;
 }
